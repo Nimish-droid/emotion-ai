@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Emotion Detection AI</title>
 
-  <script defer src="https://unpkg.com/face-api.js"></script>
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
   <style>
     body {
@@ -20,12 +23,11 @@
     }
     button {
       margin-top: 20px;
-      padding: 12px 20px;
+      padding: 14px 26px;
       font-size: 16px;
-      border: none;
-      border-radius: 6px;
       background: #00ffcc;
-      color: black;
+      border: none;
+      border-radius: 8px;
       cursor: pointer;
     }
   </style>
@@ -34,50 +36,56 @@
 <body>
 
 <h1>Facial Emotion Detection AI</h1>
-<p>Runs fully in browser (iPad supported)</p>
+<p>iPad-compatible browser AI</p>
 
-<button onclick="startApp()">Start Camera</button>
+<button id="startBtn">Start Camera</button>
 
 <br><br>
 
-<video id="video" width="720" height="560" playsinline muted></video>
+<video id="video" width="320" height="240" playsinline></video>
+<canvas id="canvas" width="320" height="240"></canvas>
 
 <script>
-  const video = document.getElementById('video');
+  const videoElement = document.getElementById("video");
+  const canvasElement = document.getElementById("canvas");
+  const canvasCtx = canvasElement.getContext("2d");
+  const startBtn = document.getElementById("startBtn");
 
-  async function startApp() {
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(
-        'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/'
-      ),
-      faceapi.nets.faceExpressionNet.loadFromUri(
-        'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/'
-      )
-    ]);
+  const faceDetection = new FaceDetection({
+    locateFile: (file) =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`,
+  });
 
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
+  faceDetection.setOptions({
+    model: "short",
+    minDetectionConfidence: 0.6,
+  });
 
-    video.addEventListener('play', () => {
-      const canvas = faceapi.createCanvasFromMedia(video);
-      document.body.append(canvas);
+  faceDetection.onResults((results) => {
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    canvasCtx.drawImage(
+      results.image,
+      0,
+      0,
+      canvasElement.width,
+      canvasElement.height
+    );
 
-      const displaySize = { width: video.width, height: video.height };
-      faceapi.matchDimensions(canvas, displaySize);
+    if (results.detections.length > 0) {
+      drawDetections(canvasCtx, results.detections);
+    }
+  });
 
-      setInterval(async () => {
-        const detections = await faceapi
-          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceExpressions();
-
-        const resized = faceapi.resizeResults(detections, displaySize);
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-
-        faceapi.draw.drawDetections(canvas, resized);
-        faceapi.draw.drawFaceExpressions(canvas, resized);
-      }, 200);
+  startBtn.onclick = async () => {
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await faceDetection.send({ image: videoElement });
+      },
+      width: 320,
+      height: 240,
     });
-  }
+    camera.start();
+  };
 </script>
 
 </body>
